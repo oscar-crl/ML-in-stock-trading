@@ -1,121 +1,111 @@
+import numpy
 import tensorflow as tf
+import tensorflow_transform as tft
+import tensorflow_transform.beam as tft_beam
 import matplotlib.pyplot as plt
 
-from tensorflow.keras import layers
-from tensorflow.keras import losses
-from tensorflow.keras import preprocessing
-from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
+import csv
+import numpy as np
+import pandas as pd
+import pandas_datareader as pdr
+import datetime as dt
 
-import os
-import re
-import string
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, LSTM
 
-batch_size = 32
-seed = 42
-max_features = 10000
-sequence_length = 250
-embedding_dim = 128
+# Load Data
 
-
-def set_dataset():
-    url = "http://storage.googleapis.com/download.tensorflow.org/data/stack_overflow_16k.tar.gz"
-
-    dataset = tf.keras.utils.get_file("stack_overflow_16k", url,
-                                      untar=True, cache_dir='.',
-                                      cache_subdir='')
-
-    dataset_dir = os.path.join(os.path.dirname(dataset), 'stack_overflow')
-    os.listdir(dataset_dir)
+company = 'GOOG'
+start = dt.datetime(2012, 1, 1)
+end = dt.datetime(2020, 1, 1)
 
 
-def create_subset(subset):
-    return tf.keras.preprocessing.text_dataset_from_directory(
-        'stack_overflow/train',
-        batch_size=batch_size,
-        validation_split=0.2,
-        subset=subset,
-        seed=seed)
+def load_data():
+    print(f"Fetching data for {company}...\n")
+    fetched_data = pdr.DataReader(company, 'av-daily', start, end, api_key='6MD7RC1W9BX3339N')
+    fetched_data.to_csv('data.csv')
+    return fetched_data
 
 
-def custom_standardization(input_data):
-    lowercase = tf.strings.lower(input_data)
-    stripped_html = tf.strings.regex_replace(lowercase, '<br />', ' ')
-    return tf.strings.regex_replace(stripped_html, '[%s]' % re.escape(string.punctuation), '')
+data = pd.read_csv('data.csv')
 
+print(f"Daily closed stock price for {company}\n{data['close']}")
 
-def vectorize_text(text, label):
-    text = tf.expand_dims(text, -1)
-    return vectorize_layer(text), label
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled_data = scaler.fit_transform(data['close'].values.reshape(-1, 1))
 
+print(scaled_data)
 
-if __name__ == '__main__':
-    raw_train_ds = create_subset('training')
-    raw_val_ds = create_subset('validation')
-    raw_test_ds = tf.keras.preprocessing.text_dataset_from_directory(
-        'stack_overflow/test',
-        batch_size=batch_size)
+prediction_days = 60
 
-    vectorize_layer = TextVectorization(
-        standardize=custom_standardization,
-        max_tokens=max_features,
-        output_mode='int',
-        output_sequence_length=sequence_length)
+x_train = []
+y_train = []
 
-    train_text = raw_train_ds.map(lambda x, y: x)
-    vectorize_layer.adapt(train_text)
-    train_ds = raw_train_ds.map(vectorize_text)
-    val_ds = raw_val_ds.map(vectorize_text)
-    test_ds = raw_test_ds.map(vectorize_text)
+for x in range(prediction_days, len(scaled_data)):
+    x_train.append(scaled_data[x - prediction_days:x, 0])
+    y_train.append(scaled_data[x, 0])
 
-    AUTOTUNE = tf.data.AUTOTUNE
+x_train = np.array(x_train)
+y_train = np.array(y_train)
 
-    train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
-    val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
-    test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
+print(x_train, y_train)
 
-    model = tf.keras.Sequential([
-        layers.Embedding(max_features + 1, embedding_dim),
-        layers.Dropout(0.2),
-        layers.GlobalAveragePooling1D(),
-        layers.Dropout(0.2),
-        layers.Dense(4)])
+x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 
-    model.summary()
+print(x_train)
 
-    model.compile(loss=losses.SparseCategoricalCrossentropy(from_logits=True),
-                  optimizer='adam',
-                  metrics=['accuracy'])
+# Model
+model = Sequential()
 
-    epochs = 15
-    history = model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=epochs)
+model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
+model.add(Dropout(0.2))
+model.add(LSTM(units=50, return_sequences=True))
+model.add(Dropout(0.2))
+model.add(LSTM(units=50))
+model.add(Dropout(0.2))
+model.add(Dense(units=1))
 
-    loss, accuracy = model.evaluate(test_ds)
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.fit(x_train, y_train, epochs=25, batch_size=32)
 
-    print("Loss: ", loss)
-    print("Accuracy: ", accuracy)
+test_start = dt.datetime(2020, 1, 1)
+test_end = dt.datetime.now()
 
-    export_model = tf.keras.Sequential([
-        vectorize_layer,
-        model,
-        layers.Activation('sigmoid')
-    ])
+test_data = pdr.DataReader(company, 'av-daily', test_start, test_end, api_key='6MD7RC1W9BX3339N')
+actual_prices = test_data['close'].values
 
-    export_model.compile(
-        loss=losses.SparseCategoricalCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy']
-    )
+print(f"Actual Data for {company}\n{test_data['close']}")
 
-    loss, accuracy = export_model.evaluate(raw_test_ds)
-    print(accuracy)
+total_dataset = pd.concat((data['close'], test_data['close']), axis=0)
 
-    examples = [
-        "public static void main(string[] args)",
-        "console.log()",
-        "for month in range(1, 13): print(i)"
-    ]
+model_inputs = total_dataset[len(total_dataset) - len(test_data) - prediction_days:].values
+model_inputs = model_inputs.reshape(-1, 1)
+model_inputs = scaler.transform(model_inputs)
 
-    res = export_model.predict(examples, verbose=1)
-    print(res)
+x_test = []
 
+for x in range(prediction_days, len(model_inputs)):
+    x_test.append(model_inputs[x - prediction_days:x, 0])
+
+x_test = np.array(x_test)
+x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
+
+predicted_prices = model.predict(x_test)
+predicted_prices = scaler.inverse_transform(predicted_prices)
+
+plt.plot(actual_prices, color='black', label=f'Actual {company} price')
+plt.plot(predicted_prices, color='green', label=f'Predicted {company} price')
+plt.title(f"{company} Share price")
+plt.xlabel("Time")
+plt.ylabel(f"{company} Share price")
+plt.legend()
+plt.show()
+
+real_data = [model_inputs[len(model_inputs) + 1 - prediction_days:len(model_inputs + 1), 0]]
+real_data = np.array(real_data)
+real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 1))
+
+prediction = model.predict(real_data)
+prediction = scaler.inverse_transform(prediction)
+print(f"Prediction {prediction}")
