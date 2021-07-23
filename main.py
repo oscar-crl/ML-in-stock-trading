@@ -4,7 +4,6 @@ import tensorflow_transform as tft
 import tensorflow_transform.beam as tft_beam
 import matplotlib.pyplot as plt
 
-import csv
 import numpy as np
 import pandas as pd
 import pandas_datareader as pdr
@@ -14,28 +13,40 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM
 
+import requests
+
 # Load Data
+company = 'AAPL'
 
-company = 'GOOG'
-start = dt.datetime(2012, 1, 1)
-end = dt.datetime(2020, 1, 1)
+USER_AGENT = {
+    'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'
+                   ' Chrome/91.0.4472.124 Safari/537.36')
+    }
+sesh = requests.Session()
+sesh.headers.update(USER_AGENT)
+
+# https://github.com/yumoxu/stocknet-dataset
 
 
-def load_data():
-    print(f"Fetching data for {company}...\n")
-    fetched_data = pdr.DataReader(company, 'av-daily', start, end, api_key='6MD7RC1W9BX3339N')
-    fetched_data.to_csv('data.csv')
+def load_data(file, start, end):
+    # fetched_data = pdr.DataReader(company, 'av-daily', start, end, api_key='6MD7RC1W9BX3339N')
+    fetched_data = pdr.DataReader(company, 'yahoo', start, end, session=sesh)
+    fetched_data.to_csv(f'data_{file}.csv')
     return fetched_data
 
 
-data = pd.read_csv('data.csv')
+print(f"Fetching data for {company}...\n")
+train_start = dt.datetime(2012, 1, 1)
+train_end = dt.datetime(2020, 1, 1)
+try:
+    data = pd.read_csv('data_train.csv')
+except IOError:
+    data = load_data('train', train_start, train_end)
 
-print(f"Daily closed stock price for {company}\n{data['close']}")
+print(f"Daily closed stock price for {company}\n{data['Close']}")
 
 scaler = MinMaxScaler(feature_range=(0, 1))
-scaled_data = scaler.fit_transform(data['close'].values.reshape(-1, 1))
-
-print(scaled_data)
+scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
 
 prediction_days = 60
 
@@ -49,11 +60,7 @@ for x in range(prediction_days, len(scaled_data)):
 x_train = np.array(x_train)
 y_train = np.array(y_train)
 
-print(x_train, y_train)
-
 x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
-
-print(x_train)
 
 # Model
 model = Sequential()
@@ -71,13 +78,15 @@ model.fit(x_train, y_train, epochs=25, batch_size=32)
 
 test_start = dt.datetime(2020, 1, 1)
 test_end = dt.datetime.now()
+try:
+    test_data = pd.read_csv('data_test.csv')
+except IOError:
+    test_data = load_data('test', test_start, test_end)
 
-test_data = pdr.DataReader(company, 'av-daily', test_start, test_end, api_key='6MD7RC1W9BX3339N')
-actual_prices = test_data['close'].values
+actual_prices = test_data['Close'].values
 
-print(f"Actual Data for {company}\n{test_data['close']}")
-
-total_dataset = pd.concat((data['close'], test_data['close']), axis=0)
+print(f"Actual Data for {company}\n{test_data['Close']}")
+total_dataset = pd.concat((data['Close'], test_data['Close']), axis=0)
 
 model_inputs = total_dataset[len(total_dataset) - len(test_data) - prediction_days:].values
 model_inputs = model_inputs.reshape(-1, 1)
@@ -94,6 +103,7 @@ x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
 predicted_prices = model.predict(x_test)
 predicted_prices = scaler.inverse_transform(predicted_prices)
 
+# Plot
 plt.plot(actual_prices, color='black', label=f'Actual {company} price')
 plt.plot(predicted_prices, color='green', label=f'Predicted {company} price')
 plt.title(f"{company} Share price")
