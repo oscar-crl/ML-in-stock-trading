@@ -26,6 +26,8 @@ sesh = requests.Session()
 sesh.headers.update(USER_AGENT)
 
 # https://github.com/yumoxu/stocknet-dataset
+# https://azure.microsoft.com/en-us/services/cognitive-services/text-analytics/#features
+# https://developer.twitter.com/en/docs/tutorials/how-to-analyze-the-sentiment-of-your-own-tweets
 
 
 def load_data(file, start, end):
