@@ -42,8 +42,10 @@ def model():
         encoding="ISO-8859-1",
         engine='python',
         names=["Score", "Id", "Date", "Query", "User", "Text"])
-    train_dataset = raw_train_ds.drop(columns=["Id", "Date", "Query", "User"])
-    train_dataset.Score = train_dataset.Score.replace({2: 1, 4: 2})
+    train_dataset = raw_train_ds.drop(columns=["Id", "Date", "Query", "User"]).sample(frac=1)
+    train_dataset.Score = train_dataset.Score.replace({2: 0.5, 4: 1})
+
+    train_dataset = train_dataset[:int(len(train_dataset) * 0.04)]
 
     raw_train_ds = train_dataset[:int(len(train_dataset) * 0.8)]
     raw_val_ds = train_dataset[int(len(train_dataset) * 0.8):]
@@ -53,11 +55,11 @@ def model():
         names=["Score", "Id", "Date", "Query", "User", "Text"])
 
     test_dataset = raw_test_ds.drop(columns=["Id", "Date", "Query", "User"])
-    test_dataset.Score = test_dataset.Score.replace({2: 1, 4: 2})
+    test_dataset.Score = test_dataset.Score.replace({2: 0.5, 4: 1})
     raw_test_ds = test_dataset
 
-    raw_train_ds = tf.data.Dataset.from_tensor_slices((raw_train_ds.Text.values, raw_train_ds.Score.values)).shuffle(len(raw_train_ds)).batch(4000)
-    raw_val_ds = tf.data.Dataset.from_tensor_slices((raw_val_ds.Text.values, raw_val_ds.Score.values)).shuffle(len(raw_val_ds)).batch(4000)
+    raw_train_ds = tf.data.Dataset.from_tensor_slices((raw_train_ds.Text.values, raw_train_ds.Score.values)).shuffle(len(raw_train_ds)).batch(200)
+    raw_val_ds = tf.data.Dataset.from_tensor_slices((raw_val_ds.Text.values, raw_val_ds.Score.values)).shuffle(len(raw_val_ds)).batch(200)
     raw_test_ds = tf.data.Dataset.from_tensor_slices((raw_test_ds.Text.values, raw_test_ds.Score.values)).batch(20)
 
     for feat, targ in raw_train_ds.take(3):
@@ -77,13 +79,13 @@ def model():
         layers.Dropout(0.2),
         layers.GlobalAveragePooling1D(),
         layers.Dropout(0.2),
-        layers.Dense(3)])
+        layers.Dense(1)])
 
     model.summary()
 
-    model.compile(loss=losses.SparseCategoricalCrossentropy(from_logits=True),
+    model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
                   optimizer='adam',
-                  metrics=['accuracy'])
+                  metrics=tf.metrics.BinaryAccuracy(threshold=0.0))
 
     epochs = 15
     model.fit(
@@ -103,9 +105,7 @@ def model():
     ])
 
     export_model.compile(
-        loss=losses.SparseCategoricalCrossentropy(from_logits=False),
-        optimizer='adam',
-        metrics=['accuracy']
+        loss=losses.BinaryCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy']
     )
 
     loss, accuracy = export_model.evaluate(raw_test_ds)
@@ -113,9 +113,9 @@ def model():
 
 
     examples = [
-        "The movie was great!",
-        "The movie was okay.",
-        "The movie was terrible..."
+        "This company is great!",
+        "This company is okay.",
+        "This company is terrible..."
     ]
     res = export_model.predict(examples, verbose=1)
     print(res)
