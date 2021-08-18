@@ -7,9 +7,6 @@ from keras.layers.preprocessing.text_vectorization import LOWER_AND_STRIP_PUNCTU
 import pandas as pd
 
 
-# http://help.sentiment140.com/for-students
-
-
 class SentimentAnalysisModel:
 
     def __init__(self, batch_size, seed, max_features, sequence_length, embedding_dim):
@@ -37,29 +34,29 @@ class SentimentAnalysisModel:
             'text_dataset/training.1600000.processed.noemoticon.csv',
             encoding="ISO-8859-1",
             engine='python',
-            names=["Score", "Id", "Date", "Query", "User", "Text"])
-        train_dataset = raw_train_ds.drop(columns=["Id", "Date", "Query", "User"]).sample(frac=1)
-        train_dataset.Score = train_dataset.Score.replace({2: 0.5, 4: 1})
+            names=["Label", "Id", "Date", "Query", "User", "Text"])
 
-        train_dataset = train_dataset[:int(len(train_dataset) * 0.04)]
+        train_dataset = raw_train_ds[["Text", "Label"]].sample(frac=1)
+        train_dataset.Label = train_dataset.Label.replace({2: 0.5, 4: 1})
+        train_dataset = train_dataset[:int(len(train_dataset) * 0.1)]
 
         raw_train_ds = train_dataset[:int(len(train_dataset) * 0.8)]
         raw_val_ds = train_dataset[int(len(train_dataset) * 0.8):]
 
         raw_test_ds = pd.read_csv(
             'text_dataset/testdata.manual.2009.06.14.csv',
-            names=["Score", "Id", "Date", "Query", "User", "Text"])
+            names=["Label", "Id", "Date", "Query", "User", "Text"])
 
-        test_dataset = raw_test_ds.drop(columns=["Id", "Date", "Query", "User"])
-        test_dataset.Score = test_dataset.Score.replace({2: 0.5, 4: 1})
+        test_dataset = raw_test_ds[["Text", "Label"]]
+        test_dataset.Label = test_dataset.Label.replace({2: 0.5, 4: 1})
         raw_test_ds = test_dataset
 
         raw_train_ds = tf.data.Dataset.from_tensor_slices(
-            (raw_train_ds.Text.values, raw_train_ds.Score.values)).shuffle(len(raw_train_ds)).batch(200)
+            (raw_train_ds.Text.values, raw_train_ds.Label.values)).shuffle(len(raw_train_ds)).batch(200)
         raw_val_ds = tf.data.Dataset.from_tensor_slices(
-            (raw_val_ds.Text.values, raw_val_ds.Score.values)).shuffle(len(raw_val_ds)).batch(200)
+            (raw_val_ds.Text.values, raw_val_ds.Label.values)).shuffle(len(raw_val_ds)).batch(200)
         raw_test_ds = tf.data.Dataset.from_tensor_slices(
-            (raw_test_ds.Text.values, raw_test_ds.Score.values)).batch(20)
+            (raw_test_ds.Text.values, raw_test_ds.Label.values)).batch(20)
 
         train_text = raw_train_ds.map(lambda x, y: x)
         self.vectorize_layer.adapt(train_text)
@@ -95,8 +92,10 @@ class SentimentAnalysisModel:
         print("Loss: ", loss)
         print("Accuracy: ", accuracy)
 
-        self.model.save('saved_model/sa_model')
+        self.model.save('saved_model/sa_model.h5')
+        self.export_model()
 
+    def export_model(self):
         self.model = tf.keras.Sequential([
             self.vectorize_layer,
             self.model,
@@ -108,10 +107,10 @@ class SentimentAnalysisModel:
         )
 
     def load_model(self):
-        self.model = tf.keras.models.load_model('saved_model/sa_model')
+        self.model = tf.keras.models.load_model('saved_model/sa_model.h5')
         self.model.summary()
+        self.export_model()
 
     def get_score(self, text):
-        res = self.model.predict(text, verbose=1)
-        print(res)
-        return res
+        res = self.model.predict(text)
+        return res[0, 0]

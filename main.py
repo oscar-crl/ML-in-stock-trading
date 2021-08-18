@@ -10,7 +10,7 @@ import requests
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras import layers
 
-import sentiment_analysis
+from sentiment_analysis import SentimentAnalysisModel
 from tweets import Tweets
 
 USER_AGENT = {
@@ -23,7 +23,7 @@ sesh.headers.update(USER_AGENT)
 
 class StockModel:
 
-    def __init__(self, company, prediction_days, plot, train_start, train_end, test_start, test_end):
+    def __init__(self, company, prediction_days, plot, train_start, train_end, test_start, test_end, sentiment_analysis):
         self.company = company
         self.prediction_days = prediction_days
         self.plot = plot
@@ -31,6 +31,7 @@ class StockModel:
         self.train_end = train_end
         self.test_start = test_start
         self.test_end = test_end
+        self.sentiment_analysis = sentiment_analysis
 
     def get_historical_prices(self, file, start, end):
         try:
@@ -54,7 +55,15 @@ class StockModel:
     def process(self):
         print(f"Fetching data for {self.company}...\n")
         data = self.get_historical_prices('train', self.train_start, self.train_end)
-        data['Score'] = 0.2
+        train_tweets_ds = Tweets(
+            company=self.company,
+            lang='en',
+            start_time=self.train_start,
+            end_time=self.train_end,
+            skip_days=14,
+            sentiment_analysis=self.sentiment_analysis
+        ).process()
+        data['Score'] = train_tweets_ds.Score.values
         print(f"Daily closed stock price for {self.company}\n{data['Close']}")
 
         scaler = MinMaxScaler(feature_range=(0, 1))
@@ -85,8 +94,18 @@ class StockModel:
         model.compile(optimizer='adam', loss='mean_squared_error')
         model.fit(x_train, y_train, epochs=25, batch_size=32)
 
+        model.save('saved_model/stock_model.h5')
+
         test_data = self.get_historical_prices('test', self.test_start, self.test_end)
-        test_data['Score'] = 0.8
+        test_tweets_ds = Tweets(
+            company=self.company,
+            lang='en',
+            start_time=self.test_start,
+            end_time=self.test_end,
+            skip_days=14,
+            sentiment_analysis=self.sentiment_analysis
+        ).process()
+        test_data['Score'] = test_tweets_ds.Score.values
         print(f"Actual Data for {self.company}\n{test_data['Close']}")
 
         total_dataset = pd.concat((data, test_data), axis=0)
@@ -121,6 +140,14 @@ class StockModel:
 
 
 def main():
+    sa = SentimentAnalysisModel(
+        batch_size=32,
+        seed=42,
+        max_features=10000,
+        sequence_length=250,
+        embedding_dim=128
+    ).process()
+
     StockModel(
         company='AAPL',
         prediction_days=60,
@@ -128,32 +155,10 @@ def main():
         train_start=dt.datetime(2019, 1, 1),
         train_end=dt.datetime(2020, 1, 1),
         test_start=dt.datetime(2020, 1, 1),
-        test_end=dt.datetime.now()
+        test_end=dt.datetime.now(),
+        sentiment_analysis=sa
     ).process()
-
-
-def sa():
-    sa = sentiment_analysis.SentimentAnalysisModel(
-        batch_size=32,
-        seed=42,
-        max_features=10000,
-        sequence_length=250,
-        embedding_dim=128
-    )
-    sa.process()
-    examples = [
-        "This company is great!",
-        "This company is okay.",
-        "This company is terrible..."
-    ]
-    sa.get_score(examples)
-
-
-def twt():
-    Tweets(company='AAPL', lang='en').get_tweets(dt.datetime(2021, 8, 8), dt.datetime.now() - dt.timedelta(hours=1))
 
 
 if __name__ == '__main__':
     main()
-    # sa()
-    # twt()
