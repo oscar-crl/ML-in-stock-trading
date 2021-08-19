@@ -31,20 +31,18 @@ class SentimentAnalysisModel:
 
     def create_datasets(self):
         raw_train_ds = pd.read_csv(
-            'text_dataset/training.1600000.processed.noemoticon.csv',
-            encoding="ISO-8859-1",
-            engine='python',
+            'saved_datasets/text_sentiment/training_processed_text_sentiment.csv',
             names=["Label", "Id", "Date", "Query", "User", "Text"])
 
         train_dataset = raw_train_ds[["Text", "Label"]].sample(frac=1)
         train_dataset.Label = train_dataset.Label.replace({2: 0.5, 4: 1})
-        train_dataset = train_dataset[:int(len(train_dataset) * 0.1)]
+        train_dataset = train_dataset[:int(len(train_dataset) * 0.5)]
 
         raw_train_ds = train_dataset[:int(len(train_dataset) * 0.8)]
         raw_val_ds = train_dataset[int(len(train_dataset) * 0.8):]
 
         raw_test_ds = pd.read_csv(
-            'text_dataset/testdata.manual.2009.06.14.csv',
+            'saved_datasets/text_sentiment/test_manual_processed_text_sentiment.csv',
             names=["Label", "Id", "Date", "Query", "User", "Text"])
 
         test_dataset = raw_test_ds[["Text", "Label"]]

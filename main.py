@@ -35,11 +35,11 @@ class StockModel:
 
     def get_historical_prices(self, file, start, end):
         try:
-            data = pd.read_csv(f'saved_datasets/data_{file}.csv')
+            data = pd.read_csv(f'saved_datasets/stock_prices/{file}_raw_stock_prices.csv')
             data = data.set_index("Date")
         except IOError:
             data = pdr.DataReader(self.company, 'yahoo', start, end, session=sesh)
-            data.to_csv(f'saved_datasets/data_{file}.csv')
+            data.to_csv(f'saved_datasets/stock_prices/{file}_raw_stock_prices.csv')
         return data
 
     def display_plot(self, actual_prices, predicted_prices):
@@ -54,14 +54,15 @@ class StockModel:
 
     def process(self):
         print(f"Fetching data for {self.company}...\n")
-        data = self.get_historical_prices('train', self.train_start, self.train_end)
+        data = self.get_historical_prices('training', self.train_start, self.train_end)
         train_tweets_ds = Tweets(
             company=self.company,
             lang='en',
             start_time=self.train_start,
             end_time=self.train_end,
-            skip_days=14,
-            sentiment_analysis=self.sentiment_analysis
+            skip_days=30,
+            sentiment_analysis=self.sentiment_analysis,
+            subset='training'
         ).process()
         data['Score'] = train_tweets_ds.Score.values
         print(f"Daily closed stock price for {self.company}\n{data['Close']}")
@@ -102,8 +103,9 @@ class StockModel:
             lang='en',
             start_time=self.test_start,
             end_time=self.test_end,
-            skip_days=14,
-            sentiment_analysis=self.sentiment_analysis
+            skip_days=30,
+            sentiment_analysis=self.sentiment_analysis,
+            subset='test'
         ).process()
         test_data['Score'] = test_tweets_ds.Score.values
         print(f"Actual Data for {self.company}\n{test_data['Close']}")
@@ -152,7 +154,7 @@ def main():
         company='AAPL',
         prediction_days=60,
         plot=True,
-        train_start=dt.datetime(2019, 1, 1),
+        train_start=dt.datetime(2018, 1, 1),
         train_end=dt.datetime(2020, 1, 1),
         test_start=dt.datetime(2020, 1, 1),
         test_end=dt.datetime.now(),

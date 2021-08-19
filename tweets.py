@@ -6,12 +6,13 @@ from searchtweets import collect_results, gen_request_parameters, load_credentia
 
 class Tweets:
 
-    def __init__(self, company, lang, start_time, end_time, skip_days, sentiment_analysis):
+    def __init__(self, company, lang, start_time, end_time, skip_days, sentiment_analysis, subset):
         self.company = company
         self.lang = lang
         self.search_tweets_args = load_credentials("config.yaml", yaml_key="search_tweets_full_v2", env_overwrite=False)
         self.tweets_ds = self.get_tweets_dataset(start_time, end_time, skip_days)
         self.sentiment_analysis = sentiment_analysis
+        self.subset = subset
 
     def collect_results(self, start, end):
         query = gen_request_parameters(
@@ -33,6 +34,7 @@ class Tweets:
         tweets_ds.index.name = "Date"
         split_start = start_time
         end_time = end_time - dt.timedelta(hours=3)
+
         while split_start < end_time:
             split_end = split_start + dt.timedelta(days=skip_days)
             if split_end >= end_time:
@@ -41,6 +43,7 @@ class Tweets:
             if split_end >= time_deadline:
                 split_end = time_deadline
                 end_time = time_deadline
+
             tweets = self.collect_results(split_start.strftime("%Y-%m-%d %H:%M"), split_end.strftime("%Y-%m-%d %H:%M"))
             selected_tweet = {'score': 0, 'text': ""}
             for tweet in tweets:
@@ -56,16 +59,16 @@ class Tweets:
 
     def get_tweets_dataset(self, start_time, end_time, skip_days):
         try:
-            data = pd.read_csv('saved_datasets/raw_tweets_ds.csv')
+            data = pd.read_csv(f'saved_datasets/tweets/{self.subset}_raw_tweets.csv')
             data = data.set_index("Date")
         except IOError:
             data = self.get_tweets(start_time, end_time, skip_days)
-            data.to_csv('saved_datasets/raw_tweets_ds.csv')
+            data.to_csv(f'saved_datasets/tweets/{self.subset}_raw_tweets.csv')
         return data
 
     def process(self):
         processed_tweets_ds = self.tweets_ds.apply(
             lambda x: pd.Series([x.Text, self.sentiment_analysis.get_score([x.Text])], index=['Text', 'Score']),
             axis=1)
-        processed_tweets_ds.to_csv('saved_datasets/processed_tweets_ds.csv')
+        processed_tweets_ds.to_csv(f'saved_datasets/{self.subset}_processed_tweets.csv')
         return processed_tweets_ds
