@@ -10,9 +10,9 @@ class Tweets:
         self.company = company
         self.lang = lang
         self.search_tweets_args = load_credentials("config.yaml", yaml_key="search_tweets_full_v2", env_overwrite=False)
-        self.tweets_ds = self.get_tweets_dataset(start_time, end_time, skip_days)
         self.sentiment_analysis = sentiment_analysis
         self.subset = subset
+        self.tweets_ds = self.get_tweets_dataset(start_time, end_time, skip_days)
 
     def collect_results(self, start, end):
         query = gen_request_parameters(

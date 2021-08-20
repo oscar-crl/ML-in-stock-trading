@@ -32,9 +32,10 @@ class SentimentAnalysisModel:
     def create_datasets(self):
         raw_train_ds = pd.read_csv(
             'saved_datasets/text_sentiment/training_processed_text_sentiment.csv',
-            names=["Label", "Id", "Date", "Query", "User", "Text"])
+            low_memory=False
+        )
 
-        train_dataset = raw_train_ds[["Text", "Label"]].sample(frac=1)
+        train_dataset = raw_train_ds.sample(frac=1)
         train_dataset.Label = train_dataset.Label.replace({2: 0.5, 4: 1})
         train_dataset = train_dataset[:int(len(train_dataset) * 0.5)]
 
@@ -45,9 +46,7 @@ class SentimentAnalysisModel:
             'saved_datasets/text_sentiment/test_manual_processed_text_sentiment.csv',
             names=["Label", "Id", "Date", "Query", "User", "Text"])
 
-        test_dataset = raw_test_ds[["Text", "Label"]]
-        test_dataset.Label = test_dataset.Label.replace({2: 0.5, 4: 1})
-        raw_test_ds = test_dataset
+        raw_test_ds.Label = raw_test_ds.Label.replace({2: 0.5, 4: 1})
 
         raw_train_ds = tf.data.Dataset.from_tensor_slices(
             (raw_train_ds.Text.values, raw_train_ds.Label.values)).shuffle(len(raw_train_ds)).batch(200)
