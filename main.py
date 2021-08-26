@@ -154,9 +154,9 @@ def main():
         company='AAPL',
         prediction_days=60,
         plot=True,
-        train_start=dt.datetime(2018, 1, 1),
-        train_end=dt.datetime(2020, 1, 1),
-        test_start=dt.datetime(2020, 1, 1),
+        train_start=dt.datetime(2020, 1, 1),
+        train_end=dt.datetime(2021, 1, 1),
+        test_start=dt.datetime(2021, 1, 1),
         test_end=dt.datetime.now(),
         sentiment_analysis=sa
     ).process()

@@ -1,7 +1,7 @@
 import pandas as pd
 import datetime as dt
 
-from searchtweets import collect_results, gen_request_parameters, load_credentials
+from searchtweets import collect_results, gen_rule_payload, load_credentials
 
 
 class Tweets:
@@ -9,22 +9,21 @@ class Tweets:
     def __init__(self, company, lang, start_time, end_time, skip_days, sentiment_analysis, subset):
         self.company = company
         self.lang = lang
-        self.search_tweets_args = load_credentials("config.yaml", yaml_key="search_tweets_full_v2", env_overwrite=False)
+        self.search_tweets_args = load_credentials("config.yaml", yaml_key="search_tweets_full", env_overwrite=False)
         self.sentiment_analysis = sentiment_analysis
         self.subset = subset
         self.tweets_ds = self.get_tweets_dataset(start_time, end_time, skip_days)
 
     def collect_results(self, start, end):
-        query = gen_request_parameters(
+        query = gen_rule_payload(
             f"{self.company} lang:{self.lang}",
-            granularity=None,
+            from_date=start,
+            to_date=end,
             results_per_call=10,
-            start_time=start,
-            end_time=end,
-            tweet_fields="created_at,public_metrics")
+        )
         tweets = collect_results(
             query,
-            max_tweets=10,
+            max_results=10,
             result_stream_args=self.search_tweets_args
         )
         return tweets
@@ -47,11 +46,13 @@ class Tweets:
             tweets = self.collect_results(split_start.strftime("%Y-%m-%d %H:%M"), split_end.strftime("%Y-%m-%d %H:%M"))
             selected_tweet = {'score': 0, 'text': ""}
             for tweet in tweets:
-                for t in tweet['data']:
-                    metrics = t['public_metrics']
-                    metrics_score = metrics["retweet_count"] + metrics["reply_count"] + metrics["like_count"] + metrics["quote_count"]
+                metrics = tweet.get('quoted_status')
+                if not metrics:
+                    metrics = tweet
+                if metrics:
+                    metrics_score = tweet["retweet_count"] + tweet["reply_count"] + tweet["favorite_count"] + tweet["quote_count"]
                     if metrics_score > selected_tweet['score']:
-                        selected_tweet = {'score': metrics_score, 'text': t['text']}
+                        selected_tweet = {'score': metrics_score, 'text': tweet['text']}
             for days in pd.date_range(split_start, split_end):
                 tweets_ds.loc[str(days.date())] = selected_tweet['text']
             split_start = split_end
