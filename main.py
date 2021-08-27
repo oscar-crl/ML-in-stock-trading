@@ -40,6 +40,7 @@ class StockModel:
         except IOError:
             data = pdr.DataReader(self.company, 'yahoo', start, end, session=sesh)
             data.to_csv(f'saved_datasets/stock_prices/{file}_raw_stock_prices.csv')
+            data = data.set_index("Date")
         return data
 
     def display_plot(self, actual_prices, predicted_prices):
@@ -60,12 +61,13 @@ class StockModel:
             lang='en',
             start_time=self.train_start,
             end_time=self.train_end,
-            skip_days=30,
+            skip_days=14,
             sentiment_analysis=self.sentiment_analysis,
             subset='training'
         ).process()
-        data['Score'] = train_tweets_ds.Score.values
-        print(f"Daily closed stock price for {self.company}\n{data['Close']}")
+        data['Score'] = train_tweets_ds['Score']
+        data['Score'] = data['Score'].fillna(0.5)
+        print(f"Daily closed stock price for {self.company}\n{data[['Close', 'Score']]}")
 
         scaler = MinMaxScaler(feature_range=(0, 1))
         scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
@@ -77,9 +79,11 @@ class StockModel:
             window_price = scaled_data[x - self.prediction_days:x, 0]
             window_score = data['Score'].values[x - self.prediction_days:x]
             x_train.append(list(zip(window_price, window_score)))
+            # x_train.append(window_price)
             y_train.append(scaled_data[x, 0])
 
         x_train = np.array(x_train)
+        # x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
         y_train = np.array(y_train)
 
         model = tf.keras.Sequential([
@@ -103,12 +107,13 @@ class StockModel:
             lang='en',
             start_time=self.test_start,
             end_time=self.test_end,
-            skip_days=30,
+            skip_days=14,
             sentiment_analysis=self.sentiment_analysis,
             subset='test'
         ).process()
-        test_data['Score'] = test_tweets_ds.Score.values
-        print(f"Actual Data for {self.company}\n{test_data['Close']}")
+        test_data['Score'] = test_tweets_ds['Score']
+        test_data['Score'] = test_data['Score'].fillna(0.5)
+        print(f"Actual Data for {self.company}\n{test_data[['Close', 'Score']]}")
 
         total_dataset = pd.concat((data, test_data), axis=0)
         model_inputs = total_dataset["Close"][len(total_dataset) - len(test_data) - self.prediction_days:].values
@@ -120,8 +125,10 @@ class StockModel:
             window_price = model_inputs[x - self.prediction_days:x, 0]
             window_score = total_dataset['Score'].values[x - self.prediction_days:x]
             x_test.append(list(zip(window_price, window_score)))
+            # x_test.append(window_price)
 
         x_test = np.array(x_test)
+        # x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
 
         actual_prices = test_data['Close'].values
         predicted_prices = model.predict(x_test)
@@ -134,7 +141,9 @@ class StockModel:
         window_score = total_dataset['Score'].values[-self.prediction_days:]
 
         real_data = [list(zip(window_price, window_score))]
+        # real_data = [window_price]
         real_data = np.array(real_data)
+        # real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 1))
 
         prediction = model.predict(real_data)
         prediction = scaler.inverse_transform(prediction)
@@ -148,13 +157,18 @@ def main():
         max_features=10000,
         sequence_length=250,
         embedding_dim=128
-    ).process()
+    )
+    sa.process()
+
+    print(sa.get_score(["This company is great!"]))
+    print(sa.get_score(["This company is okay."]))
+    print(sa.get_score(["This company is terrible..."]))
 
     StockModel(
         company='AAPL',
         prediction_days=60,
         plot=True,
-        train_start=dt.datetime(2020, 1, 1),
+        train_start=dt.datetime(2012, 1, 1),
         train_end=dt.datetime(2021, 1, 1),
         test_start=dt.datetime(2021, 1, 1),
         test_end=dt.datetime.now(),

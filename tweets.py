@@ -71,5 +71,5 @@ class Tweets:
         processed_tweets_ds = self.tweets_ds.apply(
             lambda x: pd.Series([x.Text, self.sentiment_analysis.get_score([x.Text])], index=['Text', 'Score']),
             axis=1)
-        processed_tweets_ds.to_csv(f'saved_datasets/{self.subset}_processed_tweets.csv')
+        processed_tweets_ds.to_csv(f'saved_datasets/tweets/{self.subset}_processed_tweets.csv')
         return processed_tweets_ds
