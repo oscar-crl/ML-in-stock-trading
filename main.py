@@ -79,11 +79,9 @@ class StockModel:
             window_price = scaled_data[x - self.prediction_days:x, 0]
             window_score = data['Score'].values[x - self.prediction_days:x]
             x_train.append(list(zip(window_price, window_score)))
-            # x_train.append(window_price)
             y_train.append(scaled_data[x, 0])
 
         x_train = np.array(x_train)
-        # x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
         y_train = np.array(y_train)
 
         model = tf.keras.Sequential([
@@ -125,10 +123,8 @@ class StockModel:
             window_price = model_inputs[x - self.prediction_days:x, 0]
             window_score = total_dataset['Score'].values[x - self.prediction_days:x]
             x_test.append(list(zip(window_price, window_score)))
-            # x_test.append(window_price)
 
         x_test = np.array(x_test)
-        # x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
 
         actual_prices = test_data['Close'].values
         predicted_prices = model.predict(x_test)
@@ -141,9 +137,7 @@ class StockModel:
         window_score = total_dataset['Score'].values[-self.prediction_days:]
 
         real_data = [list(zip(window_price, window_score))]
-        # real_data = [window_price]
         real_data = np.array(real_data)
-        # real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 1))
 
         prediction = model.predict(real_data)
         prediction = scaler.inverse_transform(prediction)
@@ -159,10 +153,6 @@ def main():
         embedding_dim=128
     )
     sa.process()
-
-    print(sa.get_score(["This company is great!"]))
-    print(sa.get_score(["This company is okay."]))
-    print(sa.get_score(["This company is terrible..."]))
 
     StockModel(
         company='AAPL',
