@@ -15,14 +15,14 @@ class Tweets:
         self.tweets_ds = self.get_tweets_dataset(start_time, end_time, skip_days)
 
     def collect_results(self, start, end):
-        query = gen_rule_payload(
+        payload = gen_rule_payload(
             f"{self.company} lang:{self.lang}",
             from_date=start,
             to_date=end,
             results_per_call=10,
         )
         tweets = collect_results(
-            query,
+            payload,
             max_results=10,
             result_stream_args=self.search_tweets_args
         )

@@ -95,7 +95,7 @@ class StockModel:
         ])
 
         model.compile(optimizer='adam', loss='mean_squared_error')
-        model.fit(x_train, y_train, epochs=25, batch_size=32)
+        model.fit(x_train, y_train, epochs=50, batch_size=32)
 
         model.save('saved_model/stock_model.h5')
 
@@ -159,8 +159,8 @@ def main():
         prediction_days=60,
         plot=True,
         train_start=dt.datetime(2012, 1, 1),
-        train_end=dt.datetime(2021, 1, 1),
-        test_start=dt.datetime(2021, 1, 1),
+        train_end=dt.datetime(2020, 1, 1),
+        test_start=dt.datetime(2020, 1, 1),
         test_end=dt.datetime.now(),
         sentiment_analysis=sa
     ).process()
